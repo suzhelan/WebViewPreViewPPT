@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT Viewer</title>
+    <!-- PPTXjs 所需CSS -->
+    <link rel="stylesheet" href="./css/pptxjs.css">
+    <link rel="stylesheet" href="./css/nv.d3.min.css">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        #container {
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        }
+
+        .slide {
+            display: none;
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .slide.active {
+            display: block;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(66, 133, 244, 0.2);
+            border-top: 5px solid #4285f4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            padding: 12px 25px;
+            margin: 0 10px;
+            font-size: 16px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            min-width: 120px;
+        }
+
+        button:hover {
+            background: #3367d6;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .page-info {
+            margin: 0 20px;
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+            min-width: 150px;
+        }
+
+        .error {
+            color: #d93025;
+            padding: 30px;
+            text-align: center;
+            font-size: 18px;
+            border: 2px dashed #ffcdd2;
+            border-radius: 8px;
+            background: #fff9f9;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div id="loading">
+    <div class="spinner"></div>
+    <div>正在加载文档...</div>
+</div>
+<div id="container"></div>
+<div id="nav">
+    <button id="prevBtn" onclick="prevPage()" disabled>上一页</button>
+    <div class="page-info" id="pageInfo">第 0 页 / 共 0 页</div>
+    <button id="nextBtn" onclick="nextPage()" disabled>下一页</button>
+</div>
+
+<!-- PPTXjs 所需JS -->
+<script src="./js/jquery-1.11.3.min.js"></script>
+<script src="./js/jszip.min.js"></script>
+<script src="./js/filereader.js"></script>
+<script src="./js/d3.min.js"></script>
+<script src="./js/nv.d3.min.js"></script>
+<script src="./js/dingbat.js"></script>
+<script src="./js/pptxjs.js"></script>
+<script src="./js/divs2slides.js"></script>
+
+<script>
+    // 全局状态管理
+    const state = {
+        currentPage: 0,
+        totalPages: 0,
+        slides: [],
+        isDocumentLoaded: false
+    };
+
+    function loadDocument(blob) {
+        showLoading(true);
+        const container = document.getElementById("container");
+        container.innerHTML = '<div id="pptx-container"></div>';
+
+        // 配置PPTXjs选项
+        $("#pptx-container").pptxToHtml({
+            pptxSource: blob,
+            slidesScale: "90%",
+            slideMode: false,
+            keyBoardShortCut: false,
+            mediaProcess: true,
+            jsZipV2: "./js/jszip.min.js",
+            themeProcess: true,
+            slideType: "divs2slidesjs",
+            slideModeConfig: {
+                nav: false,
+                showPlayPauseBtn: false,
+                keyBoardShortCut: false,
+                showSlideNum: false,
+                showTotalSlideNum: false,
+                autoSlide: false,
+                loop: false
+            },
+            afterRender: function() {
+                // 渲染完成后初始化分页
+                initSlidesNavigation();
+            }
+        });
+    }
+
+    function initSlidesNavigation() {
+        // 获取所有幻灯片元素
+        state.slides = Array.from(document.querySelectorAll('.slide'));
+        state.totalPages = state.slides.length;
+        state.currentPage = 0;
+        state.isDocumentLoaded = true;
+
+        if (state.totalPages > 0) {
+            // 激活第一张幻灯片
+            state.slides[0].classList.add('active');
+            updateNavigation();
+        }
+        showLoading(false);
+    }
+
+    // 显示/隐藏加载指示器
+    function showLoading(show) {
+        document.getElementById("loading").style.display = show ? "flex" : "none";
+    }
+
+    // 翻页函数
+    function showPage(pageIndex) {
+        if (pageIndex < 0 || pageIndex >= state.totalPages) return;
+
+        // 隐藏当前页
+        if (state.slides[state.currentPage]) {
+            state.slides[state.currentPage].classList.remove('active');
+        }
+
+        // 显示新页面
+        state.slides[pageIndex].classList.add('active');
+        state.currentPage = pageIndex;
+
+        // 滚动到页面顶部
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        updateNavigation();
+
+        return state.currentPage;
+    }
+
+    // 上一页
+    function prevPage() {
+        return showPage(state.currentPage - 1);
+    }
+
+    // 下一页
+    function nextPage() {
+        return showPage(state.currentPage + 1);
+    }
+
+    // 更新导航状态
+    function updateNavigation() {
+        const prevBtn = document.getElementById("prevBtn");
+        const nextBtn = document.getElementById("nextBtn");
+        const pageInfo = document.getElementById("pageInfo");
+
+        if (!prevBtn || !nextBtn || !pageInfo) return;
+
+        prevBtn.disabled = !state.isDocumentLoaded || state.currentPage === 0;
+        nextBtn.disabled = !state.isDocumentLoaded || state.currentPage === state.totalPages - 1;
+        pageInfo.textContent = `第 ${state.currentPage + 1} 页 / 共 ${state.totalPages} 页`;
+    }
+
+    function toPage(pageIndex) {
+        const targetPage = parseInt(pageIndex) - 1;
+        if (isNaN(targetPage)) return -1;
+        return showPage(Math.max(0, Math.min(targetPage, state.totalPages - 1)));
+    }
+
+    // 暴露给Android的API
+    window.DocxViewer = {
+        loadFromBase64: function(base64Data) {
+            try {
+                const binaryString = atob(base64Data);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], {
+                    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                });
+                loadDocument(blob);
+            } catch (error) {
+                console.error("Base64解码失败:", error);
+                alert("文档加载失败: 无效的Base64数据");
+            }
+        },
+        loadFromBlob: function(blob) {
+            blob = new Blob([blob], {
+                type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            });
+            loadDocument(blob);
+        },
+        prevPage: prevPage,
+        nextPage: nextPage,
+        toPage: toPage,
+        getCurrentPage: function() {
+            return state.currentPage + 1;
+        },
+        getTotalPages: function() {
+            return state.totalPages;
+        }
+    };
+
+    // 初始化页面
+    window.onload = function() {
+        updateNavigation();
+
+        // 添加额外的错误监控
+        window.addEventListener('error', function(event) {
+            console.error("全局错误捕获:", event.error);
+            const container = document.getElementById("container");
+            if (container) {
+                container.innerHTML = `<div class="error">发生意外错误: ${event.message}</div>`;
+            }
+            showLoading(false);
+        });
+    };
+</script>
+</body>
+</html>
