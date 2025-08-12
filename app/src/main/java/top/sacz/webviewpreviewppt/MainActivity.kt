@@ -1,14 +1,7 @@
 package top.sacz.webviewpreviewppt
 
-import android.R.attr.text
-import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Bundle
-import android.util.Base64
-import android.view.LayoutInflater
-import android.view.ViewGroup
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -28,10 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import top.sacz.webviewpreviewppt.ui.theme.WebViewPreViewPPTTheme
 import top.sacz.webviewpreviewppt.ui.view.PPTWebPreView
-import top.sacz.webviewpreviewppt.ui.view.rememberWebViewController
+import top.sacz.webviewpreviewppt.ui.view.rememberWebViewState
 import top.sacz.webviewpreviewppt.util.FileUtil
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +32,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             WebViewPreViewPPTTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) {  innerPadding ->
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     MainView(
                         modifier = Modifier
                             .padding(innerPadding)
@@ -55,21 +47,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainView(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val webViewController = rememberWebViewController()
+    val webViewState = rememberWebViewState()
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             val file = FileUtil.getFileFromUri(context, uri)
-            val fileBytes = file.readBytes()
-            val base64 = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
-            webViewController.loadDocxFromBase64(base64)
+            webViewState.loadFile(file)
         }
     }
     Column(
         modifier = modifier.fillMaxSize()
     ) {
-
         //选择ppt文件
         Button(
             modifier = Modifier
@@ -93,7 +83,7 @@ fun MainView(modifier: Modifier = Modifier) {
             Button(
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    webViewController.goPreviousPage()
+                    webViewState.goPreviousPage()
                 }
             ) {
                 Text(text = "上一页")
@@ -101,20 +91,23 @@ fun MainView(modifier: Modifier = Modifier) {
             Button(
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    webViewController.goNextPage()
+                    webViewState.goNextPage()
                 }
             ) {
                 Text(text = "下一页")
             }
         }
 
-
+        Text(
+            modifier = Modifier.padding(16.dp),
+            text = "当前页：${webViewState.curPageIndex + 1}/${webViewState.totalPageCount}"
+        )
 
         PPTWebPreView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(400.dp),
-            webViewController = webViewController
+            webViewState = webViewState
         )
     }
 }
